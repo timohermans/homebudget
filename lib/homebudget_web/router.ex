@@ -17,6 +17,7 @@ defmodule HomebudgetWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :index
+    get "/transactions/upload", TransactionController, :upload
   end
 
   # Other scopes may use custom stacks.
