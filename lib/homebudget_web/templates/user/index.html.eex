@@ -1,0 +1,18 @@
+<h1>Users at home</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>User</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <%= for user <- @users do %>
+    <tr>
+      <td><%= render HomebudgetWeb.UserView, "user.html", user: user %></td>
+      <td><%= link "View", to: Routes.user_path(@conn, :show, user.id) %></td>
+    </tr>
+    <%end%>
+  </tbody>
+</table>

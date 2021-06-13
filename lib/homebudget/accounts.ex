@@ -3,26 +3,32 @@ defmodule Homebudget.Accounts do
   The Accounts context.
   """
 
+  alias Homebudget.Repo
   alias Homebudget.Accounts.User
 
   def list_users do
-    [
-      %User{id: 1, name: "Timo Hermans", username: "timo"},
-      %User{id: 2, name: "Ryanne Kerkhoffs", username: "ryanne"}
-    ]
+    Repo.all(User)
   end
 
   def get_user(id) do
-    list_users()
-    |> Enum.find(&(id == &1.id))
+    Repo.get(User, id)
+  end
+
+  def get_user!(id) do
+    Repo.get!(User, id)
   end
 
   def get_user_by(params) do
-    list_users()
-    |> Enum.find(
-      &Enum.all?(params, fn {key, value} ->
-        Map.get(&1, key) == value
-      end)
-    )
+    Repo.get_by(User, params)
+  end
+
+  def change_user(%User{} = user) do
+    User.changeset(user, %{})
+  end
+
+  def create_user(attrs \\ %{}) do
+    %User{}
+    |> User.changeset(attrs)
+    |> Repo.insert()
   end
 end

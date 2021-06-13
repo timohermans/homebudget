@@ -1,3 +1,4 @@
 <div class="phx-hero">
-  <h2>Hello transaction upload</h2>
+  <h2>Upload your transactions here</h2>
+  <p>Right now I only support Rabobank .csv files 🤗</p>
 </div>

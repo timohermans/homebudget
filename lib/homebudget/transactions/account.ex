@@ -15,4 +15,4 @@ defmodule Homebudget.Transactions.Account do
     |> cast(attrs, [:name, :account_number])
     |> validate_required([:name, :account_number])
   end
-end
+ end

@@ -1,0 +1,3 @@
+<h1>Show user</h1>
+
+<%= render HomebudgetWeb.UserView, "user.html", user: @user %>
