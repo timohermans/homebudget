@@ -7,6 +7,11 @@ defmodule HomebudgetWeb.Router do
     plug :fetch_flash
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug HomebudgetWeb.Auth
+  end
+
+  pipeline :authenticate do
+    plug HomebudgetWeb.Plugs.EnsureAuthenticated
   end
 
   pipeline :api do
@@ -17,7 +22,13 @@ defmodule HomebudgetWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :index
-    resources "/users", UserController, only: [:index, :show, :new, :create]
+    resources "/users", UserController, only: [:new, :create]
+  end
+
+  scope "/", HomebudgetWeb do
+    pipe_through [:browser, :authenticate]
+
+    resources "/users", UserController, only: [:index, :show]
   end
 
   # Other scopes may use custom stacks.
