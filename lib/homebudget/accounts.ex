@@ -31,4 +31,15 @@ defmodule Homebudget.Accounts do
     |> User.changeset(attrs)
     |> Repo.insert()
   end
+
+  def change_registration(%User{} = user, params) do
+    user
+    |> User.registration_changeset(params)
+  end
+
+  def register_user(attrs \\ %{}) do
+    %User{}
+    |> User.registration_changeset(attrs)
+    |> Repo.insert()
+  end
 end

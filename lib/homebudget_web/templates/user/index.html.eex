@@ -16,3 +16,7 @@
     <%end%>
   </tbody>
 </table>
+
+<p>
+  <%= link "Add a new user", to: Routes.user_path(@conn, :new) %>
+</p>
