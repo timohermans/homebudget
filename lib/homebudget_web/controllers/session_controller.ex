@@ -4,10 +4,12 @@ defmodule HomebudgetWeb.SessionController do
   alias Homebudget.Accounts
 
   def new(conn, _) do
+    # TODO: test
     render(conn, "new.html")
   end
 
   def create(conn, %{"session" => %{"username" => username, "password" => password}}) do
+    # TODO: test
     case Accounts.authenticate_by_username_and_password(username, password) do
       {:ok, user} ->
         conn
@@ -23,6 +25,7 @@ defmodule HomebudgetWeb.SessionController do
   end
 
   def delete(conn, %{"id" => _}) do
+    # TODO: test
     conn
     |> HomebudgetWeb.Auth.logout()
     |> redirect(to: Routes.page_path(conn, :index))
