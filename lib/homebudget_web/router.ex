@@ -23,6 +23,7 @@ defmodule HomebudgetWeb.Router do
 
     get "/", PageController, :index
     resources "/users", UserController, only: [:new, :create]
+    resources "/sessions", SessionController, only: [:new, :create, :delete]
   end
 
   scope "/", HomebudgetWeb do
