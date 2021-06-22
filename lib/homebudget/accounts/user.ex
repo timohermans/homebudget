@@ -9,6 +9,10 @@ defmodule Homebudget.Accounts.User do
     field :password_hash, :string
 
     timestamps()
+
+    has_one :receiver, Homebudget.Transactions.Account
+    has_one :other_party, Homebudget.Transactions.Account
+    has_many :transactions, Homebudget.Transactions.Transaction
   end
 
   def registration_changeset(user, attrs) do
