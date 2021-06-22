@@ -30,6 +30,7 @@ defmodule HomebudgetWeb.Router do
     pipe_through [:browser, :authenticate]
 
     resources "/users", UserController, only: [:index, :show]
+    resources "/transactions", TransactionController
   end
 
   # Other scopes may use custom stacks.
