@@ -2,3 +2,9 @@
   <h1><%= gettext "Welcome to %{name}!", name: "HomeBudget" %></h1>
   <p>Keep your total budget in mind, all at home!</p>
 </section>
+
+<stack-l space="var(--s3)">
+  <div>this will be</div>
+  <div>the future of all</div>
+  <div>financial accommodations</div>
+</stack-l>

@@ -6,6 +6,8 @@ defmodule Homebudget.Accounts do
   alias Homebudget.Repo
   alias Homebudget.Accounts.User
 
+  import Ecto.Query, warn: false
+
   def list_users do
     Repo.all(User)
   end
@@ -57,5 +59,9 @@ defmodule Homebudget.Accounts do
         Pbkdf2.no_user_verify()
         {:error, :not_found}
     end
+  end
+
+  def include_user(query) do
+    from q in query, join: u in assoc(q, :user)
   end
 end

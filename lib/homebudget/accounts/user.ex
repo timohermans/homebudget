@@ -1,4 +1,13 @@
 defmodule Homebudget.Accounts.User do
+  @type t :: %__MODULE__{
+          name: String.t(),
+          username: String.t(),
+          password: String.t(),
+          password_hash: String.t(),
+          receiver: Homebudget.Transactions.Account.t(),
+          other_party: Homebudget.Transactions.Account.t()
+        }
+
   use Ecto.Schema
   import Ecto.Changeset
 

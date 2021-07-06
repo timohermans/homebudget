@@ -1,8 +1,19 @@
 defmodule Homebudget.Transactions.Transaction do
+  @type t :: %__MODULE__{
+          code: String.t(),
+          amount: Decimal.t(),
+          currency: String.t(),
+          date: Date.t(),
+          memo: String.t(),
+          user: Homebudget.Accounts.User.t(),
+          receiver: Homebudget.Transactions.Account.t(),
+          other_party: Homebudget.Transactions.Account.t()
+        }
   use Ecto.Schema
   import Ecto.Changeset
 
   schema "transactions" do
+    field :code, :string
     field :amount, :decimal
     field :currency, :string
     field :date, :date
@@ -16,10 +27,14 @@ defmodule Homebudget.Transactions.Transaction do
     belongs_to :other_party, Homebudget.Transactions.Account
   end
 
-  @doc false
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(transaction, attrs) do
+    # TODO: test failing put_assoc
     transaction
-    |> cast(attrs, [:date, :currency, :memo, :amount, :timestamps])
-    |> validate_required([:date, :currency, :memo, :amount, :timestamps])
+    |> cast(attrs, [:code, :date, :currency, :memo, :amount, :user_id])
+    |> validate_required([:code, :date, :currency, :amount])
+    |> assoc_constraint(:user)
+    |> assoc_constraint(:receiver)
+    |> assoc_constraint(:other_party)
   end
 end

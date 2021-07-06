@@ -3,6 +3,7 @@ defmodule Homebudget.Repo.Migrations.CreateTransactions do
 
   def change do
     create table(:transactions) do
+      add :code, :string
       add :date, :date
       add :currency, :string
       add :memo, :string
@@ -15,6 +16,7 @@ defmodule Homebudget.Repo.Migrations.CreateTransactions do
       timestamps()
     end
 
+    create unique_index(:transactions, [:code])
     create index(:transactions, [:other_party_id])
     create index(:transactions, [:receiver_id])
     create index(:transactions, [:user_id])

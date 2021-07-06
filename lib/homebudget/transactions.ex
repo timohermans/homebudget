@@ -2,103 +2,185 @@ defmodule Homebudget.Transactions do
   @moduledoc """
   The Transactions context.
   """
+  require Logger
 
   import Ecto.Query, warn: false
   alias Homebudget.Repo
 
   alias Homebudget.Transactions.Transaction
+  alias Homebudget.Transactions.Account
 
-  @doc """
-  Returns the list of transactions.
-
-  ## Examples
-
-      iex> list_transactions()
-      [%Transaction{}, ...]
-
-  """
-  def list_transactions do
-    Repo.all(Transaction)
+  def list_transactions(user) do
+    Transaction
+    |> of_user(user)
+    |> Repo.all()
   end
 
-  @doc """
-  Gets a single transaction.
-
-  Raises `Ecto.NoResultsError` if the Transaction does not exist.
-
-  ## Examples
-
-      iex> get_transaction!(123)
-      %Transaction{}
-
-      iex> get_transaction!(456)
-      ** (Ecto.NoResultsError)
-
-  """
-  def get_transaction!(id), do: Repo.get!(Transaction, id)
-
-  @doc """
-  Creates a transaction.
-
-  ## Examples
-
-      iex> create_transaction(%{field: value})
-      {:ok, %Transaction{}}
-
-      iex> create_transaction(%{field: bad_value})
-      {:error, %Ecto.Changeset{}}
-
-  """
-  def create_transaction(attrs \\ %{}) do
-    %Transaction{}
-    |> Transaction.changeset(attrs)
-    |> Repo.insert()
+  def get_transaction!(id, user) do
+    Transaction
+    |> of_user(user)
+    |> Repo.get!(id)
   end
 
-  @doc """
-  Updates a transaction.
-
-  ## Examples
-
-      iex> update_transaction(transaction, %{field: new_value})
-      {:ok, %Transaction{}}
-
-      iex> update_transaction(transaction, %{field: bad_value})
-      {:error, %Ecto.Changeset{}}
-
-  """
-  def update_transaction(%Transaction{} = transaction, attrs) do
-    transaction
-    |> Transaction.changeset(attrs)
-    |> Repo.update()
+  defp of_user(query, %{id: user_id}) do
+    query
+    |> where([t], t.user_id == ^user_id)
   end
 
-  @doc """
-  Deletes a transaction.
+  @type file_path :: String.t()
+  @type file_parse_result :: %{failures: integer(), duplicates: integer(), successes: integer()}
+  @spec create_transactions_from(
+          file_path(),
+          Homebudget.Accounts.User.t()
+        ) ::
+          {:ok, file_parse_result()}
+          | {:error, :empty_file}
+          | {:error, file_parse_result()}
+  def create_transactions_from(file_path, user) do
+    # TODO: refactor
+    parse_report =
+      File.stream!(file_path, [{:encoding, :latin1}])
+      |> CSV.decode(headers: true)
+      |> Stream.map(&persist_accounts_and_transactions(&1, user))
+      |> Enum.reduce(%{successes: 0, duplicates: 0, failures: 0}, fn result, report ->
+        case result do
+          {:ok, :is_duplicate} ->
+            %{report | duplicates: report.duplicates + 1}
 
-  ## Examples
+          {:ok, _} ->
+            %{report | successes: report.successes + 1}
 
-      iex> delete_transaction(transaction)
-      {:ok, %Transaction{}}
+          {:error, :transaction, %Ecto.Changeset{} = changeset, _} ->
+            changeset.errors
+            |> Enum.reduce(
+              "Invalid transaction with the following validation errors: ",
+              fn {property, {error, _}}, message ->
+                "#{message}#{property}: #{error}, "
+              end
+            )
+            |> Logger.warning()
 
-      iex> delete_transaction(transaction)
-      {:error, %Ecto.Changeset{}}
+            %{report | failures: report.failures + 1}
 
-  """
-  def delete_transaction(%Transaction{} = transaction) do
-    Repo.delete(transaction)
+          {:error, _} ->
+            %{report | failures: report.failures + 1}
+        end
+      end)
+
+    case parse_report do
+      %{successes: 0, failures: failures} when failures > 0 -> {:error, parse_report}
+      %{successes: 0, duplicates: 0} -> {:error, :empty_file}
+      _ -> {:ok, parse_report}
+    end
   end
 
-  @doc """
-  Returns an `%Ecto.Changeset{}` for tracking transaction changes.
+  defp persist_accounts_and_transactions({:ok, csv_row}, user) do
+    db_transaction = Repo.get_by(Transaction, code: extract_code_from(csv_row))
 
-  ## Examples
+    unless db_transaction do
+      Ecto.Multi.new()
+      |> Ecto.Multi.run(:receiver, fn repo, _changes ->
+        get_or_create_receiver_for(repo, csv_row, user)
+      end)
+      |> Ecto.Multi.run(:other_party, fn repo, _changes ->
+        get_or_create_other_party_for(repo, csv_row, user)
+      end)
+      |> Ecto.Multi.insert(:transaction, fn %{receiver: receiver, other_party: other_party} ->
+        create_transaction_changeset_for(csv_row, receiver, other_party, user)
+      end)
+      |> Homebudget.Repo.transaction()
+    else
+      {:ok, :is_duplicate}
+    end
+  end
 
-      iex> change_transaction(transaction)
-      %Ecto.Changeset{data: %Transaction{}}
+  defp extract_code_from(csv_row), do: csv_row["IBAN/BBAN"] <> csv_row["Volgnr"]
 
-  """
-  def change_transaction(%Transaction{} = transaction, attrs \\ %{}) do
-    Transaction.changeset(transaction, attrs)
+  defp get_or_create_receiver_for(repo, csv_row, user) do
+    receiver = %{
+      name: "Own account",
+      account_number: csv_row["IBAN/BBAN"],
+      is_user_owner: true,
+      user_id: user.id
+    }
+
+    db_receiver =
+      Account
+      |> query_existing_account_by(receiver)
+      |> repo.one()
+
+    # TODO: Test already existing receiver
+    case db_receiver do
+      nil ->
+        %Account{}
+        |> Account.changeset(receiver)
+        |> repo.insert()
+
+      %Account{is_user_owner: false} ->
+        db_receiver
+        |> Account.changeset(%{is_user_owner: true, name: db_receiver.name})
+        |> repo.update()
+
+      db_receiver ->
+        {:ok, db_receiver}
+    end
+  end
+
+  defp query_existing_account_by(query, %{account_number: nil, name: account_name}) do
+    from(q in query, where: q.name == ^account_name)
+  end
+
+  defp query_existing_account_by(query, %{account_number: account_number}) do
+    from(q in query, where: q.account_number == ^account_number)
+  end
+
+  defp get_or_create_other_party_for(repo, csv_row, user) do
+    other_party = %{
+      name: csv_row["Naam tegenpartij"],
+      account_number: csv_row["Tegenrekening IBAN/BBAN"],
+      is_user_owner: false,
+      user_id: user.id
+    }
+
+    db_other_party =
+      Account
+      |> query_existing_account_by(other_party)
+      |> repo.one()
+
+    # TODO: Test already existing other_party
+    case db_other_party do
+      nil ->
+        %Account{}
+        |> Account.changeset(other_party)
+        |> repo.insert()
+
+      db_other_party ->
+        {:ok, db_other_party}
+    end
+  end
+
+  defp create_transaction_changeset_for(csv_row, receiver, other_party, user) do
+    Transaction.changeset(%Transaction{}, %{
+      code: extract_code_from(csv_row),
+      currency: csv_row["Munt"],
+      date: Date.from_iso8601!(csv_row["Datum"]),
+      memo:
+        "#{csv_row["Omschrijving-1"]} #{csv_row["Omschrijving-2"]} #{csv_row["Omschrijving-3"]}",
+      amount:
+        csv_row["Bedrag"]
+        |> String.replace(",", ".")
+        |> Decimal.parse()
+        |> elem(0)
+    })
+    |> Ecto.Changeset.put_assoc(:user, user)
+    |> Ecto.Changeset.put_assoc(:receiver, receiver)
+    |> Ecto.Changeset.put_assoc(:other_party, other_party)
   end
 end
+
+# TODO: report query
+# -- select t.date, t.amount, r.name as "to", o.name as "from" from transactions t
+# select sum(t.amount)
+# left join accounts r on r.id = t.receiver_id
+# left join accounts o on o.id = t.other_party_id
+# where t.amount < 0 and o.is_user_owner = false;

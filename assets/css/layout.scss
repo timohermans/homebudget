@@ -1,0 +1,7 @@
+stack-l {
+  display: block;
+}
+
+stack-l > * + * {
+  margin-top: var(--s1);
+}

@@ -45,7 +45,8 @@ defmodule Homebudget.MixProject do
       {:gettext, "~> 0.11"},
       {:jason, "~> 1.0"},
       {:plug_cowboy, "~> 2.0"},
-      {:pbkdf2_elixir, "~> 1.4"}
+      {:pbkdf2_elixir, "~> 1.4"},
+      {:csv, "~> 2.4"} # TODO: nimble CSV
     ]
   end
 

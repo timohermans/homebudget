@@ -1,5 +1,14 @@
 /* This file is for your main application css. */
 @import "./phoenix.css";
+@import "./layout.scss";
+
+:root {
+  --ratio: 1.5;
+  --s0: 1rem;
+  --s1: calc(var(--s0) * var(--ratio));
+  --s2: calc(var(--s1) * var(--ratio));
+  --s3: calc(var(--s2) * var(--ratio));
+}
 
 /* Alerts and form errors */
 .alert {

@@ -29,6 +29,12 @@
           <img src="<%= Routes.static_path(@conn, "/images/phoenix.png") %>" alt="Phoenix Framework Logo"/>
         </a>
       </section>
+      <section>
+        <ul>
+          <li><%= link "Transactions", to: Routes.transaction_path(@conn, :index) %></li>
+          <li><%= link "Upload transactions", to: Routes.transaction_path(@conn, :new) %></li>
+        </ul>
+      </section>
     </header>
     <main role="main" class="container">
       <p class="alert alert-info" role="alert"><%= get_flash(@conn, :info) %></p>

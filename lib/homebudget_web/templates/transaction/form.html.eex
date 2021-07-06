@@ -1,29 +1,13 @@
-<%= form_for @changeset, @action, fn f -> %>
-  <%= if @changeset.action do %>
+<%= form_for @conn, @action, [multipart: true, as: :transaction], fn f -> %>
+  <%= if @result != nil do %>
     <div class="alert alert-danger">
-      <p>Oops, something went wrong! Please check the errors below.</p>
+      <p>Parsing transactions went wrong. Still need to implement error handling though :D</p>
     </div>
   <% end %>
 
-  <%= label f, :date %>
-  <%= date_select f, :date %>
-  <%= error_tag f, :date %>
-
-  <%= label f, :currency %>
-  <%= text_input f, :currency %>
-  <%= error_tag f, :currency %>
-
-  <%= label f, :memo %>
-  <%= text_input f, :memo %>
-  <%= error_tag f, :memo %>
-
-  <%= label f, :amount %>
-  <%= number_input f, :amount, step: "any" %>
-  <%= error_tag f, :amount %>
-
-  <%= label f, :timestamps %>
-  <%= text_input f, :timestamps %>
-  <%= error_tag f, :timestamps %>
+  <%= label f, :file %>
+  <%= file_input f, :file %>
+  <%= error_tag f, :file %>
 
   <div>
     <%= submit "Save" %>
