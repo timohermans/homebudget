@@ -34,50 +34,61 @@ defmodule Homebudget.Transactions do
           Homebudget.Accounts.User.t()
         ) ::
           {:ok, file_parse_result()}
+          | {:error, :file_not_found}
           | {:error, :empty_file}
           | {:error, file_parse_result()}
   def create_transactions_from(file_path, user) do
-    # TODO: refactor
+    case File.exists?(file_path) do
+      false -> {:error, :file_not_found}
+      true -> parse_transaction_file(file_path, user)
+    end
+  end
+
+  defp parse_transaction_file(file_path, user) do
     parse_report =
       File.stream!(file_path, [{:encoding, :latin1}])
       |> CSV.decode(headers: true)
       |> Stream.map(&persist_accounts_and_transactions(&1, user))
-      |> Enum.reduce(%{successes: 0, duplicates: 0, failures: 0}, fn result, report ->
-        case result do
-          {:ok, :is_duplicate} ->
-            %{report | duplicates: report.duplicates + 1}
-
-          {:ok, _} ->
-            %{report | successes: report.successes + 1}
-
-          {:error, :transaction, %Ecto.Changeset{} = changeset, _} ->
-            changeset.errors
-            |> Enum.reduce(
-              "Invalid transaction with the following validation errors: ",
-              fn {property, {error, _}}, message ->
-                "#{message}#{property}: #{error}, "
-              end
-            )
-            |> Logger.warning()
-
-            %{report | failures: report.failures + 1}
-
-          {:error, _} ->
-            %{report | failures: report.failures + 1}
-        end
-      end)
+      |> Enum.reduce(%{successes: 0, duplicates: 0, failures: 0}, &add_transaction_result_to_report/2)
 
     case parse_report do
       %{successes: 0, failures: failures} when failures > 0 -> {:error, parse_report}
-      %{successes: 0, duplicates: 0} -> {:error, :empty_file}
+      %{successes: 0, duplicates: 0} -> {:error, :invalid_file}
       _ -> {:ok, parse_report}
     end
   end
 
+  defp add_transaction_result_to_report(result, report) do
+    case result do
+      {:ok, :is_duplicate} ->
+        %{report | duplicates: report.duplicates + 1}
+
+      {:ok, _} ->
+        %{report | successes: report.successes + 1}
+
+      {:error, :transaction, %Ecto.Changeset{} = changeset, _} ->
+        changeset.errors
+        |> Enum.reduce(
+          "Invalid transaction with the following validation errors: ",
+          fn {property, {error, _}}, message ->
+            "#{message}#{property}: #{error}, "
+          end
+        )
+        |> Logger.warning()
+
+        %{report | failures: report.failures + 1}
+
+      {:error, _} ->
+        %{report | failures: report.failures + 1}
+    end
+  end
+
+  defp persist_accounts_and_transactions({:error, _ } = error, _user), do: error
+
   defp persist_accounts_and_transactions({:ok, csv_row}, user) do
     db_transaction = Repo.get_by(Transaction, code: extract_code_from(csv_row))
 
-    unless db_transaction do
+    if db_transaction == nil do
       Ecto.Multi.new()
       |> Ecto.Multi.run(:receiver, fn repo, _changes ->
         get_or_create_receiver_for(repo, csv_row, user)
@@ -109,12 +120,9 @@ defmodule Homebudget.Transactions do
       |> query_existing_account_by(receiver)
       |> repo.one()
 
-    # TODO: Test already existing receiver
     case db_receiver do
       nil ->
-        %Account{}
-        |> Account.changeset(receiver)
-        |> repo.insert()
+        create_account(receiver)
 
       %Account{is_user_owner: false} ->
         db_receiver
@@ -150,9 +158,7 @@ defmodule Homebudget.Transactions do
     # TODO: Test already existing other_party
     case db_other_party do
       nil ->
-        %Account{}
-        |> Account.changeset(other_party)
-        |> repo.insert()
+        create_account(other_party)
 
       db_other_party ->
         {:ok, db_other_party}
@@ -175,6 +181,12 @@ defmodule Homebudget.Transactions do
     |> Ecto.Changeset.put_assoc(:user, user)
     |> Ecto.Changeset.put_assoc(:receiver, receiver)
     |> Ecto.Changeset.put_assoc(:other_party, other_party)
+  end
+
+  def create_account(attrs \\ %{}) do
+    %Account{}
+    |> Account.changeset(attrs)
+    |> Repo.insert()
   end
 end
 

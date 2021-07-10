@@ -1,137 +1,103 @@
 defmodule Homebudget.TransactionsTest do
-  use Homebudget.DataCase
+  use Homebudget.DataCase, async: true
+
+  import Ecto.Query, warn: false
 
   alias Homebudget.Transactions
+  alias Homebudget.Transactions.{Transaction, Account}
 
-  test "template transaction context test" do
-    assert true
+  describe "create_transactions_from/2" do
+    setup do
+      %{user: Homebudget.TestHelpers.user_fixture()}
+    end
+
+    test "parse a 1 row file into 1 transaction and 2 accounts successfully", %{user: user} do
+      single_row_file_path = fixture_file_path("single_dummy.csv")
+
+      assert {:ok, %{successes: 1, duplicates: 0, failures: 0}} =
+               Transactions.create_transactions_from(single_row_file_path, user)
+
+      # Assertions
+      [transaction] = transactions = list_all_transactions_with_accounts(user)
+
+      assert 1 == length(transactions)
+      assert ~D[2019-09-01] == transaction.date
+      assert Decimal.new("2.50") == transaction.amount
+      assert "NL11RABO0104955555000000000000007213" == transaction.code
+      assert "EUR" == transaction.currency
+      assert "Spotify 1 2" == transaction.memo
+      assert user.id == transaction.user_id
+
+      assert "Own account" == transaction.receiver.name
+      assert "NL11RABO0104955555" == transaction.receiver.account_number
+      assert "NL42RABO0114164838" == transaction.other_party.account_number
+      assert "J.M.G. Kerkhoffs eo" == transaction.other_party.name
+    end
+
+    test "parse a 2 row file into 2 transactions and 2 (duplicate) accounts successfully", %{
+      user: user
+    } do
+      multiple_duplicate_accounts_file_path = fixture_file_path("duplicate_account.csv")
+
+      assert {:ok, %{successes: 2, failures: 0, duplicates: 0}} =
+               Homebudget.Transactions.create_transactions_from(
+                 multiple_duplicate_accounts_file_path,
+                 user
+               )
+
+      accounts =
+        Repo.all(
+          from a in Account,
+            where: a.user_id == ^user.id
+        )
+
+      assert 2 == length(accounts)
+
+      assert Enum.find(
+               accounts,
+               &(&1.account_number == "NL11RABO0104955555" and &1.is_user_owner == true)
+             )
+
+      assert Enum.find(
+               accounts,
+               &(&1.account_number == "NL42RABO0114164838" and &1.is_user_owner == false)
+             )
+    end
+
+    test "parse a 3 row file into 2 transactions (1 duplicate) successfully", %{user: user} do
+      duplicate_transaction_file_path = fixture_file_path("duplicate_transaction.csv")
+
+      assert {:ok, %{successes: 2, duplicates: 1}} =
+               Transactions.create_transactions_from(duplicate_transaction_file_path, user)
+    end
+
+    test "returns an error when file is missing", %{user: user} do
+      missing_file_path = fixture_file_path("missing_file.csv")
+
+      assert {:error, :file_not_found} =
+               Transactions.create_transactions_from(missing_file_path, user)
+    end
+
+    test "parse a file with no csv headers returns error", %{user: user} do
+      missing_headers_path = fixture_file_path("missing_headers.csv")
+
+      assert {:error, :invalid_file} =
+               Transactions.create_transactions_from(missing_headers_path, user)
+    end
+
+    test "parse a file with 1 faulty row included returns error", %{user: user} do
+      faulty_file_path = fixture_file_path("faulty_transaction.csv")
+
+      assert {:ok, %{ successes: 1, duplicates: 0, failures: 1}} = Transactions.create_transactions_from(faulty_file_path, user)
+
+    end
   end
 
-  # describe "accounts" do
-  #   alias Homebudget.Transactions.Account
-
-  #   @valid_attrs %{account_number: "some account_number", name: "some name"}
-  #   @update_attrs %{account_number: "some updated account_number", name: "some updated name"}
-  #   @invalid_attrs %{account_number: nil, name: nil}
-
-  #   def account_fixture(attrs \\ %{}) do
-  #     {:ok, account} =
-  #       attrs
-  #       |> Enum.into(@valid_attrs)
-  #       |> Transactions.create_account()
-
-  #     account
-  #   end
-
-  #   test "list_accounts/0 returns all accounts" do
-  #     account = account_fixture()
-  #     assert Transactions.list_accounts() == [account]
-  #   end
-
-  #   test "get_account!/1 returns the account with given id" do
-  #     account = account_fixture()
-  #     assert Transactions.get_account!(account.id) == account
-  #   end
-
-  #   test "create_account/1 with valid data creates a account" do
-  #     assert {:ok, %Account{} = account} = Transactions.create_account(@valid_attrs)
-  #     assert account.account_number == "some account_number"
-  #     assert account.name == "some name"
-  #   end
-
-  #   test "create_account/1 with invalid data returns error changeset" do
-  #     assert {:error, %Ecto.Changeset{}} = Transactions.create_account(@invalid_attrs)
-  #   end
-
-  #   test "update_account/2 with valid data updates the account" do
-  #     account = account_fixture()
-  #     assert {:ok, %Account{} = account} = Transactions.update_account(account, @update_attrs)
-  #     assert account.account_number == "some updated account_number"
-  #     assert account.name == "some updated name"
-  #   end
-
-  #   test "update_account/2 with invalid data returns error changeset" do
-  #     account = account_fixture()
-  #     assert {:error, %Ecto.Changeset{}} = Transactions.update_account(account, @invalid_attrs)
-  #     assert account == Transactions.get_account!(account.id)
-  #   end
-
-  #   test "delete_account/1 deletes the account" do
-  #     account = account_fixture()
-  #     assert {:ok, %Account{}} = Transactions.delete_account(account)
-  #     assert_raise Ecto.NoResultsError, fn -> Transactions.get_account!(account.id) end
-  #   end
-
-  #   test "change_account/1 returns a account changeset" do
-  #     account = account_fixture()
-  #     assert %Ecto.Changeset{} = Transactions.change_account(account)
-  #   end
-  # end
-
-  # describe "transactions" do
-  #   alias Homebudget.Transactions.Transaction
-
-  #   @valid_attrs %{amount: "120.5", currency: "some currency", date: ~D[2010-04-17], memo: "some memo", timestamps: "some timestamps"}
-  #   @update_attrs %{amount: "456.7", currency: "some updated currency", date: ~D[2011-05-18], memo: "some updated memo", timestamps: "some updated timestamps"}
-  #   @invalid_attrs %{amount: nil, currency: nil, date: nil, memo: nil, timestamps: nil}
-
-  #   def transaction_fixture(attrs \\ %{}) do
-  #     {:ok, transaction} =
-  #       attrs
-  #       |> Enum.into(@valid_attrs)
-  #       |> Transactions.create_transaction()
-
-  #     transaction
-  #   end
-
-  #   test "list_transactions/0 returns all transactions" do
-  #     transaction = transaction_fixture()
-  #     assert Transactions.list_transactions() == [transaction]
-  #   end
-
-  #   test "get_transaction!/1 returns the transaction with given id" do
-  #     transaction = transaction_fixture()
-  #     assert Transactions.get_transaction!(transaction.id) == transaction
-  #   end
-
-  #   test "create_transaction/1 with valid data creates a transaction" do
-  #     assert {:ok, %Transaction{} = transaction} = Transactions.create_transaction(@valid_attrs)
-  #     assert transaction.amount == Decimal.new("120.5")
-  #     assert transaction.currency == "some currency"
-  #     assert transaction.date == ~D[2010-04-17]
-  #     assert transaction.memo == "some memo"
-  #     assert transaction.timestamps == "some timestamps"
-  #   end
-
-  #   test "create_transaction/1 with invalid data returns error changeset" do
-  #     assert {:error, %Ecto.Changeset{}} = Transactions.create_transaction(@invalid_attrs)
-  #   end
-
-  #   test "update_transaction/2 with valid data updates the transaction" do
-  #     transaction = transaction_fixture()
-  #     assert {:ok, %Transaction{} = transaction} = Transactions.update_transaction(transaction, @update_attrs)
-  #     assert transaction.amount == Decimal.new("456.7")
-  #     assert transaction.currency == "some updated currency"
-  #     assert transaction.date == ~D[2011-05-18]
-  #     assert transaction.memo == "some updated memo"
-  #     assert transaction.timestamps == "some updated timestamps"
-  #   end
-
-  #   test "update_transaction/2 with invalid data returns error changeset" do
-  #     transaction = transaction_fixture()
-  #     assert {:error, %Ecto.Changeset{}} = Transactions.update_transaction(transaction, @invalid_attrs)
-  #     assert transaction == Transactions.get_transaction!(transaction.id)
-  #   end
-
-  #   test "delete_transaction/1 deletes the transaction" do
-  #     transaction = transaction_fixture()
-  #     assert {:ok, %Transaction{}} = Transactions.delete_transaction(transaction)
-  #     assert_raise Ecto.NoResultsError, fn -> Transactions.get_transaction!(transaction.id) end
-  #   end
-
-  #   test "change_transaction/1 returns a transaction changeset" do
-  #     transaction = transaction_fixture()
-  #     assert %Ecto.Changeset{} = Transactions.change_transaction(transaction)
-  #   end
-  # end
+  defp list_all_transactions_with_accounts(user) do
+    Repo.all(
+      from t in Transaction,
+        where: t.user_id == ^user.id,
+        preload: [:receiver, :other_party]
+    )
+  end
 end

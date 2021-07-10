@@ -46,6 +46,7 @@ defmodule Homebudget.Accounts.User do
   def changeset(user, attrs) do
     user
     |> cast(attrs, [:name, :username])
+    |> unique_constraint(:username)
     |> validate_required([:name, :username])
     |> validate_length(:username, min: 2, max: 20)
   end

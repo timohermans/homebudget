@@ -29,7 +29,6 @@ defmodule Homebudget.Transactions.Transaction do
 
   @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(transaction, attrs) do
-    # TODO: test failing put_assoc
     transaction
     |> cast(attrs, [:code, :date, :currency, :memo, :amount, :user_id])
     |> validate_required([:code, :date, :currency, :amount])

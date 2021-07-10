@@ -24,6 +24,7 @@ defmodule Homebudget.DataCase do
       import Ecto.Changeset
       import Ecto.Query
       import Homebudget.DataCase
+      import Homebudget.TestHelpers
     end
   end
 

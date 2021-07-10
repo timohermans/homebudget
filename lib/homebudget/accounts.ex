@@ -45,6 +45,9 @@ defmodule Homebudget.Accounts do
     |> Repo.insert()
   end
 
+  @spec authenticate_by_username_and_password(any, any) ::
+          {:error, :not_found | :unauthorized}
+          | {:ok, atom | %{:password_hash => <<_::48, _::_*8>>, optional(any) => any}}
   def authenticate_by_username_and_password(username, password) do
     user = Repo.get_by(User, username: username)
 
