@@ -13,7 +13,39 @@ defmodule Homebudget.Transactions do
   def list_transactions(user) do
     Transaction
     |> of_user(user)
+    |> preload([:receiver, :other_party])
     |> Repo.all()
+  end
+
+  def list_monthly_transactions(user, params) do
+    conditions =
+      %{
+        "skip_own" => "true",
+        "date" => Homebudget.Dating.get_previous_month() |> Date.to_iso8601()
+      }
+      |> Map.merge(params)
+
+    date = Date.from_iso8601!(conditions["date"])
+    start_date = Date.beginning_of_month(date)
+    end_date = Date.end_of_month(start_date)
+
+    {:ok, start_date,
+     Transaction
+     |> join(:inner, [t], o in Account, on: o.id == t.other_party_id)
+     |> where([t], t.user_id == ^user.id)
+     |> where([t], t.date >= ^start_date and t.date <= ^end_date)
+     |> filter_account_owner_on(conditions)
+     |> order_by(desc: :date)
+     |> preload([:other_party])
+     |> Repo.all()}
+  end
+
+  defp filter_account_owner_on(query, %{"skip_own" => "true"}) do
+    from [t, o] in query, where: o.is_user_owner == false
+  end
+
+  defp filter_account_owner_on(query, %{"skip_own" => "false"}) do
+    from [t, o] in query, where: o.is_user_owner == false or o.is_user_owner == true
   end
 
   def get_transaction!(id, user) do
@@ -49,7 +81,10 @@ defmodule Homebudget.Transactions do
       File.stream!(file_path, [{:encoding, :latin1}])
       |> CSV.decode(headers: true)
       |> Stream.map(&persist_accounts_and_transactions(&1, user))
-      |> Enum.reduce(%{successes: 0, duplicates: 0, failures: 0}, &add_transaction_result_to_report/2)
+      |> Enum.reduce(
+        %{successes: 0, duplicates: 0, failures: 0},
+        &add_transaction_result_to_report/2
+      )
 
     case parse_report do
       %{successes: 0, failures: failures} when failures > 0 -> {:error, parse_report}
@@ -78,12 +113,14 @@ defmodule Homebudget.Transactions do
 
         %{report | failures: report.failures + 1}
 
-      {:error, _} ->
+      {:error, error} ->
+        Logger.warning(error)
+
         %{report | failures: report.failures + 1}
     end
   end
 
-  defp persist_accounts_and_transactions({:error, _ } = error, _user), do: error
+  defp persist_accounts_and_transactions({:error, _} = error, _user), do: error
 
   defp persist_accounts_and_transactions({:ok, csv_row}, user) do
     db_transaction = Repo.get_by(Transaction, code: extract_code_from(csv_row))
@@ -134,8 +171,8 @@ defmodule Homebudget.Transactions do
     end
   end
 
-  defp query_existing_account_by(query, %{account_number: nil, name: account_name}) do
-    from(q in query, where: q.name == ^account_name)
+  defp query_existing_account_by(query, %{account_number: "", name: account_name}) do
+    from(q in query, where: q.name == ^account_name and q.account_number == "")
   end
 
   defp query_existing_account_by(query, %{account_number: account_number}) do
@@ -144,7 +181,7 @@ defmodule Homebudget.Transactions do
 
   defp get_or_create_other_party_for(repo, csv_row, user) do
     other_party = %{
-      name: csv_row["Naam tegenpartij"],
+      name: get_account_name_from(csv_row),
       account_number: csv_row["Tegenrekening IBAN/BBAN"],
       is_user_owner: false,
       user_id: user.id
@@ -162,6 +199,15 @@ defmodule Homebudget.Transactions do
 
       db_other_party ->
         {:ok, db_other_party}
+    end
+  end
+
+  defp get_account_name_from(csv_row) do
+    name = csv_row["Naam tegenpartij"]
+
+    case name do
+      "" -> "Rabobank empty name"
+      name -> name
     end
   end
 
@@ -183,16 +229,9 @@ defmodule Homebudget.Transactions do
     |> Ecto.Changeset.put_assoc(:other_party, other_party)
   end
 
-  def create_account(attrs \\ %{}) do
+  def create_account(attrs) do
     %Account{}
     |> Account.changeset(attrs)
     |> Repo.insert()
   end
 end
-
-# TODO: report query
-# -- select t.date, t.amount, r.name as "to", o.name as "from" from transactions t
-# select sum(t.amount)
-# left join accounts r on r.id = t.receiver_id
-# left join accounts o on o.id = t.other_party_id
-# where t.amount < 0 and o.is_user_owner = false;

@@ -1,92 +1,87 @@
 defmodule HomebudgetWeb.TransactionControllerTest do
-  use HomebudgetWeb.ConnCase
+  use HomebudgetWeb.ConnCase, async: true
 
-  alias Homebudget.Transactions
+  # alias Homebudget.Transactions
+  # alias Homebudget.Accounts
 
-  test "placeholder transaction controller test" do
-    assert true
+  describe "without a logged-in user" do
+    test "requires user authentication on all actions", %{conn: conn} do
+      Enum.each(
+        [
+          get(conn, Routes.transaction_path(conn, :new)),
+          get(conn, Routes.transaction_path(conn, :index)),
+          get(conn, Routes.transaction_path(conn, :show, "123")),
+          post(conn, Routes.transaction_path(conn, :create, %{}))
+        ],
+        fn conn ->
+          assert html_response(conn, 302)
+          assert conn.halted
+        end
+      )
+    end
   end
 
-  # @create_attrs %{amount: "120.5", currency: "some currency", date: ~D[2010-04-17], memo: "some memo", timestamps: "some timestamps"}
-  # @update_attrs %{amount: "456.7", currency: "some updated currency", date: ~D[2011-05-18], memo: "some updated memo", timestamps: "some updated timestamps"}
-  # @invalid_attrs %{amount: nil, currency: nil, date: nil, memo: nil, timestamps: nil}
+  describe "with a logged in user" do
+    setup %{conn: conn, login_as: username} do
+      user = user_fixture(%{username: username})
+      conn = assign(conn, :current_user, user)
 
-  # def fixture(:transaction) do
-  #   {:ok, transaction} = Transactions.create_transaction(@create_attrs)
-  #   transaction
-  # end
+      {:ok, conn: conn, user: user}
+    end
 
-  # describe "index" do
-  #   test "lists all transactions", %{conn: conn} do
-  #     conn = get(conn, Routes.transaction_path(conn, :index))
-  #     assert html_response(conn, 200) =~ "Listing Transactions"
-  #   end
-  # end
+    @tag login_as: "timo"
 
-  # describe "new transaction" do
-  #   test "renders form", %{conn: conn} do
-  #     conn = get(conn, Routes.transaction_path(conn, :new))
-  #     assert html_response(conn, 200) =~ "New Transaction"
-  #   end
-  # end
+    test "list all transactions on index", %{conn: conn, user: user} do
+      # Arrange
+      receiver = account_fixture(user)
+      own_account = account_fixture(user)
 
-  # describe "create transaction" do
-  #   test "redirects to show when data is valid", %{conn: conn} do
-  #     conn = post(conn, Routes.transaction_path(conn, :create), transaction: @create_attrs)
+      jumbo =
+        transaction_fixture(user, receiver, account_fixture(user, %{name: "Jumbo Stein"}), %{
+          amount: Decimal.new("-10")
+        })
 
-  #     assert %{id: id} = redirected_params(conn)
-  #     assert redirected_to(conn) == Routes.transaction_path(conn, :show, id)
+      aldi =
+        transaction_fixture(user, receiver, account_fixture(user, %{name: "Aldi 005 Stein"}), %{
+          amount: -20
+        })
 
-  #     conn = get(conn, Routes.transaction_path(conn, :show, id))
-  #     assert html_response(conn, 200) =~ "Show Transaction"
-  #   end
+      blokker =
+        transaction_fixture(
+          user,
+          receiver,
+          account_fixture(user, %{name: "Blokker 0392 Stein LB"}),
+          %{amount: -30}
+        )
 
-  #   test "renders errors when data is invalid", %{conn: conn} do
-  #     conn = post(conn, Routes.transaction_path(conn, :create), transaction: @invalid_attrs)
-  #     assert html_response(conn, 200) =~ "New Transaction"
-  #   end
-  # end
+        transaction_fixture(
+          user,
+          receiver,
+          own_account,
+          %{amount: 50}
+        )
 
-  # describe "edit transaction" do
-  #   setup [:create_transaction]
+      shortage =
+        transaction_fixture(
+          user,
+          receiver,
+          account_fixture(user, %{is_user_owner: true, name: "spaarrekening"}),
+          %{amount: 1000}
+        )
 
-  #   test "renders form for editing chosen transaction", %{conn: conn, transaction: transaction} do
-  #     conn = get(conn, Routes.transaction_path(conn, :edit, transaction))
-  #     assert html_response(conn, 200) =~ "Edit Transaction"
-  #   end
-  # end
+      # Act
+      conn = get(conn, Routes.transaction_path(conn, :index, %{"date" => "2020-01-02"}))
 
-  # describe "update transaction" do
-  #   setup [:create_transaction]
+      # Assert
+      assert html_response(conn, 200) =~ ~r/2020-01-01 - 2020-01-31/
+      assert String.contains?(conn.resp_body, "50.00")
+      assert String.contains?(conn.resp_body, "-60.00")
+      assert String.contains?(conn.resp_body, "-10.00")
+      assert String.contains?(conn.resp_body, jumbo.other_party.name)
+      assert String.contains?(conn.resp_body, aldi.other_party.name)
+      assert String.contains?(conn.resp_body, blokker.other_party.name)
 
-  #   test "redirects when data is valid", %{conn: conn, transaction: transaction} do
-  #     conn = put(conn, Routes.transaction_path(conn, :update, transaction), transaction: @update_attrs)
-  #     assert redirected_to(conn) == Routes.transaction_path(conn, :show, transaction)
-
-  #     conn = get(conn, Routes.transaction_path(conn, :show, transaction))
-  #     assert html_response(conn, 200) =~ "some updated currency"
-  #   end
-
-  #   test "renders errors when data is invalid", %{conn: conn, transaction: transaction} do
-  #     conn = put(conn, Routes.transaction_path(conn, :update, transaction), transaction: @invalid_attrs)
-  #     assert html_response(conn, 200) =~ "Edit Transaction"
-  #   end
-  # end
-
-  # describe "delete transaction" do
-  #   setup [:create_transaction]
-
-  #   test "deletes chosen transaction", %{conn: conn, transaction: transaction} do
-  #     conn = delete(conn, Routes.transaction_path(conn, :delete, transaction))
-  #     assert redirected_to(conn) == Routes.transaction_path(conn, :index)
-  #     assert_error_sent 404, fn ->
-  #       get(conn, Routes.transaction_path(conn, :show, transaction))
-  #     end
-  #   end
-  # end
-
-  # defp create_transaction(_) do
-  #   transaction = fixture(:transaction)
-  #   %{transaction: transaction}
-  # end
+      refute String.contains?(conn.resp_body, shortage.other_party.name)
+    end
+  end
 end

@@ -4,13 +4,13 @@ defmodule HomebudgetWeb.TransactionController do
   alias Homebudget.Transactions
 
   def action(conn, _) do
-    args = [conn, conn.params, conn.assigns.current_user]
+    args = [conn, conn.params, conn.assigns[:current_user]]
     apply(__MODULE__, action_name(conn), args)
   end
 
-  def index(conn, _params, user) do
-    transactions = Transactions.list_transactions(user)
-    render(conn, "index.html", transactions: transactions)
+  def index(conn, params, user) do
+    {:ok, start_date, transactions} = Transactions.list_monthly_transactions(user, params)
+    render(conn, "index.html", transactions: transactions, date: start_date)
   end
 
   def new(conn, _params, _user) do
@@ -18,10 +18,6 @@ defmodule HomebudgetWeb.TransactionController do
   end
 
   def create(conn, %{"transaction" => %{"file" => file_params}}, user) do
-    # TODO: No file given
-    # TODO: Error handling
-    # TODO: Write happy path test(s)
-
     case Transactions.create_transactions_from(file_params.path, user) do
       {:ok, %{successes: successes, failures: failures, duplicates: duplicates}} ->
         conn

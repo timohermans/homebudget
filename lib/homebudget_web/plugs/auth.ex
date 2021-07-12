@@ -5,8 +5,17 @@ defmodule HomebudgetWeb.Auth do
 
   def call(conn, _opts) do
     user_id = get_session(conn, :user_id)
-    user = user_id && Homebudget.Accounts.get_user(user_id)
-    assign(conn, :current_user, user)
+
+    cond do
+      conn.assigns[:current_user] ->
+        conn
+
+      user = user_id && Homebudget.Accounts.get_user(user_id) ->
+        assign(conn, :current_user, user)
+
+      true ->
+        assign(conn, :current_user, nil)
+    end
   end
 
   def login(conn, user) do

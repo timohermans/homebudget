@@ -85,11 +85,23 @@ defmodule Homebudget.TransactionsTest do
                Transactions.create_transactions_from(missing_headers_path, user)
     end
 
+    @tag capture_log: true
     test "parse a file with 1 faulty row included returns error", %{user: user} do
       faulty_file_path = fixture_file_path("faulty_transaction.csv")
 
-      assert {:ok, %{ successes: 1, duplicates: 0, failures: 1}} = Transactions.create_transactions_from(faulty_file_path, user)
+      assert {:error, %{ successes: 0, duplicates: 0, failures: 1}} = Transactions.create_transactions_from(faulty_file_path, user)
+    end
 
+    test "parse two files that updates the account from a non user to a user owned account", %{user: user} do
+      single_dummy_path = fixture_file_path("single_dummy.csv")
+      existing_account_path = fixture_file_path("non_user_account.csv")
+      assert {:ok, %{successes: 1}} = Transactions.create_transactions_from(single_dummy_path, user)
+
+      assert {:ok, %{successes: 1}} = Transactions.create_transactions_from(existing_account_path, user)
+
+      account = Repo.one!(from a in Account, where: a.account_number == "NL42RABO0114164838")
+      assert account.is_user_owner == true
+      assert account.name == "J.M.G. Kerkhoffs eo"
     end
   end
 

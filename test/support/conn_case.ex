@@ -23,6 +23,7 @@ defmodule HomebudgetWeb.ConnCase do
       import Plug.Conn
       import Phoenix.ConnTest
       import HomebudgetWeb.ConnCase
+      import Homebudget.TestHelpers
 
       alias HomebudgetWeb.Router.Helpers, as: Routes
 

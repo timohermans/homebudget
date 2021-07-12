@@ -39,6 +39,8 @@ defmodule Homebudget.Accounts do
     |> User.registration_changeset(params)
   end
 
+  @spec register_user(:invalid | %{optional(:__struct__) => none, optional(atom | binary) => any}) ::
+          any
   def register_user(attrs \\ %{}) do
     %User{}
     |> User.registration_changeset(attrs)
